@@ -20,7 +20,7 @@ CONFIG BITFLAG_TRI_FALLTHROUGH = 10b; // Attributes 2 -> Flag 2, whether or not 
 DEFINEL FLAG_ON_RAMP = 01Lb;
 DEFINEL FLAG_IGNORE_RAMP = 10Lb;
 DEFINEL FLAG_JUMP_ABOVE_0 = 100Lb;
-DEFINEL FLAG_ON_BACK_RAMP = 1000Lb;
+DEFINEL FLAG_SPECIAL = 1000Lb;
 
 @Author("TheBlueTophat, EmilyV99")
 global script Example_Ramps_Global
@@ -40,9 +40,9 @@ global script Example_Ramps_Global
 			}
 			
 			printf("on, ignore, jump>0, special case\n");
-			printf("Before: %d, %d, %d, %d\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP) ? 1 : 0));
+			printf("Before: %d, %d, %d, %d\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_SPECIAL) ? 1 : 0));
 			handleRamps();
-			printf("After : %d, %d, %d, %d\n\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP) ? 1 : 0));
+			printf("After : %d, %d, %d, %d\n\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_SPECIAL) ? 1 : 0));
 			
 			Waitframe();
 		}
@@ -100,12 +100,12 @@ bool checkRamps()
 		}
 		else
 		{
-			if((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) && !(Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP)) 
+			if((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) && !(Hero->Misc[MISC_RAMP] & FLAG_SPECIAL)) 
 				return false;
 			
 			int diff;
 			
-			unless(Hero->Jump && Hero->Y <= ComboY(posbr2))
+			unless(Hero->Jump && Hero->Y <= ComboY(posbr2) && !(Hero->Misc[MISC_RAMP] & FLAG_SPECIAL)) // DEBUG: && FLAG_SPECIAL 
 			{
 				diff = GridY(Hero->Y + 8) - Hero->Y;
 			}
@@ -133,11 +133,11 @@ bool checkRamps()
 		}
 		else
 		{
-			if((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) && !(Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP)) return false;
+			if((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) && !(Hero->Misc[MISC_RAMP] & FLAG_SPECIAL)) return false;
 			
 			int diff;
 			
-			unless(Hero->Jump && Hero->Y <= ComboY(posbl2))
+			unless(Hero->Jump && Hero->Y <= ComboY(posbl2) && !(Hero->Misc[MISC_RAMP] & FLAG_SPECIAL))
 			{
 				diff = GridY(Hero->Y + 8) - Hero->Y;
 			}
@@ -153,7 +153,7 @@ bool checkRamps()
 	{
 		unless(br->Type == CT_TRI || bl->Type == CT_TRI)
 		{
-			Hero->Misc[MISC_RAMP] ~= FLAG_IGNORE_RAMP | FLAG_ON_BACK_RAMP;
+			Hero->Misc[MISC_RAMP] ~= FLAG_IGNORE_RAMP | FLAG_SPECIAL;
 		}
 		
 		return false;
@@ -190,14 +190,25 @@ bool checkRamps()
 	unless(checkFallthrough(onCombo, diff)) 
 		return false;
 	
-	unless(Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP)
+	unless((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP)) //  || (Hero->Misc[MISC_RAMP] & FLAG_SPECIAL)
 	{
-		unless(Hero->Jump && diff >= 0 )
+		// unless(Hero->Jump && diff >= 0 )
+		// {
+			// Hero->Y = Floor(Hero->Y + diff);
+			// return true;
+		// }		
+		if(Hero->Jump == 0 && ((diff < 0 &&  !(Hero->Misc[MISC_RAMP] & FLAG_SPECIAL)) || diff >= 0) )
 		{
 			Hero->Y = Floor(Hero->Y + diff);
 			return true;
-		}		
+		}
 	}
+	
+	// if the special flag is set, and the difference would move link upwards
+	// if((Hero->Misc[MISC_RAMP] & FLAG_SPECIAL) && diff < 0)
+	// {
+		
+	// }
 	
 	return false;
 }
@@ -205,31 +216,32 @@ bool checkRamps()
 void checkBehindRamps()
 {
 	//return; // debug
-	int posbr = ComboAt(Hero->X + 3, Hero->Y+15), posbl = ComboAt(Hero->X + 15 - 3, Hero->Y+15);
+	int posbr = ComboAt(Hero->X, Hero->Y+15), posbl = ComboAt(Hero->X + 15, Hero->Y+15);
 	combodata br = Game->LoadComboData(Screen->ComboD[posbr]),
 			  bl = Game->LoadComboData(Screen->ComboD[posbl]);
 			  
 	int posbr2 = ComboAt(Hero->X + 3, Hero->Y+16), posbl2 = ComboAt(Hero->X + 15 - 3, Hero->Y+16); // DEBUG: all this stuff
 	combodata br2 = Game->LoadComboData(Screen->ComboD[posbr2]),
 			  bl2 = Game->LoadComboData(Screen->ComboD[posbl2]);
-			  
-	int posbr3 = ComboAt(Hero->X + 3, Hero->Y+16), posbl3 = ComboAt(Hero->X + 15 - 3, Hero->Y+16); // DEBUG: all this stuff
+	
+	// top left/right corners of link's hitbox
+	int posbr3 = ComboAt(Hero->X + 3, Hero->Y+0), posbl3 = ComboAt(Hero->X + 15 - 3, Hero->Y+0); // DEBUG: all this stuff
 	combodata br3 = Game->LoadComboData(Screen->ComboD[posbr3]),
 			  bl3 = Game->LoadComboData(Screen->ComboD[posbl3]);
 	
 	if(br->Type == CT_TRI && !(br->UserFlags & BITFLAG_TRI_BL))// && br3->Type != CT_TRI)
 	{
-		// If player is on a ramp "behind" another ramp, activate FLAG_ON_BACK_RAMP
-		if(br2->Type == CT_TRI)
+		// If player is on a ramp "behind" another ramp, activate FLAG_SPECIAL
+		if(br2->Type == CT_TRI && br3->Type == CT_TRI) // DEBUG: br3->Type
 		{
 			// unless(Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP)
 			{
-				Hero->Misc[MISC_RAMP] |= FLAG_ON_BACK_RAMP;
+				Hero->Misc[MISC_RAMP] |= FLAG_SPECIAL;
 			}
 		}
 		else
 		{
-			// Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+			Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 			Hero->Misc[MISC_RAMP] |= FLAG_IGNORE_RAMP;
 		}
 	
@@ -237,16 +249,16 @@ void checkBehindRamps()
 	}
 	else if(bl->Type == CT_TRI && (bl->UserFlags & BITFLAG_TRI_BL))// && bl3->Type != CT_TRI )
 	{
-		if(bl2->Type == CT_TRI)
+		if(bl2->Type == CT_TRI && bl3->Type == CT_TRI)
 		{
 			// unless(Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP)
 			{
-				Hero->Misc[MISC_RAMP] |= FLAG_ON_BACK_RAMP;
+				Hero->Misc[MISC_RAMP] |= FLAG_SPECIAL;
 			}
 		}
 		else
 		{
-			// Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+			Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 			Hero->Misc[MISC_RAMP] |= FLAG_IGNORE_RAMP;
 		}
 	
@@ -254,7 +266,7 @@ void checkBehindRamps()
 	}
 	else
 	{
-		Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+		// Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 	}
 	
 	// if(br2->Type != CT_TRI || bl2->Type != CT_TRI)
@@ -296,19 +308,19 @@ void handleRamps()
 		
 		Hero->Misc[MISC_RAMP] ~= FLAG_ON_RAMP;
 		Hero->JumpCount = 0;
-		// Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+		// Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 	}
 	
-	printf("Mid   : %d, %d, %d, %d\n\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP) ? 1 : 0));
+	printf("Mid   : %d, %d, %d, %d\n\n", ((Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_IGNORE_RAMP) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_JUMP_ABOVE_0) ? 1 : 0), ((Hero->Misc[MISC_RAMP] & FLAG_SPECIAL) ? 1 : 0));
 	
 	if(Hero->Jump > 0)
 	{
-		Hero->Misc[MISC_RAMP] ~= FLAG_ON_RAMP | FLAG_ON_BACK_RAMP;
+		Hero->Misc[MISC_RAMP] ~= FLAG_ON_RAMP | FLAG_SPECIAL;
 		
-		// Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+		// Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 	}
 	
-	unless(Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP || (Hero->Misc[MISC_RAMP] & FLAG_ON_BACK_RAMP))
+	unless(Hero->Misc[MISC_RAMP] & FLAG_ON_RAMP || (Hero->Misc[MISC_RAMP] & FLAG_SPECIAL))
 	{
 		Hero->Gravity = true;
 	}
@@ -347,7 +359,7 @@ bool checkFallthrough(combodata onCombo, int diff)
 			{
 				Hero->Y = Floor(Hero->Y + diff) + 1;
 				Hero->Misc[MISC_RAMP] |= FLAG_IGNORE_RAMP;
-				Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+				Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 				
 				//Hero->Misc[MISC_RAMP] ~= FLAG_ON_RAMP;
 				// Hero->Misc[MISC_RAMP] ~= FLAG_JUMP_ABOVE_0;
@@ -360,7 +372,7 @@ bool checkFallthrough(combodata onCombo, int diff)
 			{
 				Hero->Y = Floor(Hero->Y + diff) + 1;
 				Hero->Misc[MISC_RAMP] |= FLAG_IGNORE_RAMP;
-				Hero->Misc[MISC_RAMP] ~= FLAG_ON_BACK_RAMP;
+				Hero->Misc[MISC_RAMP] ~= FLAG_SPECIAL;
 				//Hero->Misc[MISC_RAMP] ~= FLAG_ON_RAMP;
 				// Hero->Misc[MISC_RAMP] ~= FLAG_JUMP_ABOVE_0;
 				int arr[] = {CB_A, CB_B, CB_EX1, CB_EX2};
